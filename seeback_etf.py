@@ -1,6 +1,6 @@
 import functools
 import datetime
-from datetime import date
+from datetime import date, timedelta
 from os import listdir
 
 path = 'etfs/{0}'
@@ -12,66 +12,65 @@ codes = []
 opts = []
 
 
-def calc_func(func, part, days):
-	return functools.partial(func, days, part)
+def calc_func(func, days):
+	return functools.partial(func, days)
 
 
-def roc(days, data):
-	index = data['index']
+def roc(days, code):
+	index = code['index']
 	if index - days < 0:
-		print('{0} first roc{1} day is: {2}'.format(data['name'], days, data['history'][days]['date']))
+		return -1
+	if index >= len(code['history']):
+		print('{} index {} is out of range'.format(code['code'], index))
 		exit(0)
-	if index >= len(data['history']):
-		print('{0} index {1} is out of range'.format(data['name'], index))
-		exit(0)
-	price1 = data['history'][index]['price']
-	price2 = data['history'][index - days]['price']
+	price1 = code['history'][index]['price']
+	price2 = code['history'][index - days]['price']
 	return price1 / price2 - 1
 
 
-def roc_date(name, part, date, days):
+def roc_date(name, d, days, pack):
 	for data in pack:
 		if data['name'] == name:
-			for i in range(0, len(data[part]['history'])):
-				if data[part]['history'][i]['date'] == date:
-					data[part]['index'] = i
-					return roc(days, part, data)
-				if data[part]['history'][i]['date'] > date:
+			for i in range(0, len(data['history'])):
+				if data['history'][i]['date'] == d:
+					data['index'] = i
+					return roc(days, data)
+				if data['history'][i]['date'] > d:
 					if i == 0:
 						print(
-							'{0} {1} first trade day: {2}'.format(data['name'], part, data[part]['history'][i]['date']))
+							'{} first trade day: {}'.format(data['name'], data['history'][i]['date']))
 					else:
-						print('{0} {1} has no trade day: {2}'.format(data['name'], part, date))
+						print('{} has no trade day: {}'.format(data['name'], d))
 					return
 
 
-def bias(days, part, data):
-	index = data[part]['index']
+def bias(days, data):
+	index = data['index']
 	if index - days < 0:
-		print('{0} {1} first roc{2} day is: {3}'.format(data['name'], part, days, data[part]['history'][days]['date']))
+		print('{} first roc{} day is: {}'.format(data['name'], days, data['history'][days]['date']))
 		exit(0)
-	if index >= len(data[part]['history']):
-		print('{0} {1} index {2} is out of range'.format(data['name'], part, index))
+	if index >= len(data['history']):
+		print('{} index {} is out of range'.format(data['name'], index))
 		exit(0)
 	total = 0
 	for i in range(0, days):
-		total += data[part]['history'][index - i]['price']
-	return data[part]['history'][index]['price'] / (total / days) - 1
+		total += data['history'][index - i]['price']
+	return data['history'][index]['price'] / (total / days) - 1
 
 
-def bias_date(name, part, date, days):
-	for data in codes:
+def bias_date(name, d, days, pack):
+	for data in pack:
 		if data['name'] == name:
-			for i in range(0, len(data[part]['history'])):
-				if data[part]['history'][i]['date'] == date:
-					data[part]['index'] = i
-					return bias(days, part, data)
-				if data[part]['history'][i]['date'] > date:
+			for i in range(0, len(data['history'])):
+				if data['history'][i]['date'] == d:
+					data['index'] = i
+					return bias(days, data)
+				if data['history'][i]['date'] > d:
 					if i == 0:
 						print(
-							'{0} {1} first trade day: {2}'.format(data['name'], part, data[part]['history'][i]['date']))
+							'{} first trade day: {}'.format(data['name'], data['history'][i]['date']))
 					else:
-						print('{0} {1} has no trade day: {2}'.format(data['name'], part, date))
+						print('{} has no trade day: {}'.format(data['name'], d))
 					return
 
 
@@ -90,8 +89,8 @@ def parse(code):
 		day = {'date': arr[0], 'price': float(arr[2])}
 		history.append(day)
 	data['history'] = history
-	data['begin'] = history[0]['begin']
-	data['name'] = code
+	data['begin'] = history[0]['date']
+	data['code'] = code.strip()
 	data['index'] = 0
 	return data
 
@@ -105,25 +104,30 @@ def set_index(code, begin):
 			return
 
 
-def pick(datas, d, func):
+def pick(pack, d, func):
 	n = -1
-	for data in datas:
-		if d.isoformat() < data['begin']:
-			print('{} is not start in {}'.format(data['name'], d))
+	picked = None
+	if not can_sell(d):
+		return
+	for code in pack:
+		if d < code['begin']:
+			# print('{} is not start in {}'.format(data['code'], d))
 			continue
-		if date_of(data) < d.isoformat():
+		if date_of(code) < d:
 			print('should not happen')
 			exit(0)
-		elif date_of(data) > d.isoformat():
+		elif date_of(code) > d:
 			continue
-		v = func(data, d)
+		v = func(code)
 		if n < v:
 			n = v
-			picked = data
+			picked = code
 	return picked
 
 
 def date_of(code):
+	if code['index'] >= len(code['history']):
+		return '9999-99-99'
 	return code['history'][code['index']]['date']
 
 
@@ -135,7 +139,18 @@ def wealth():
 	if state['stock']['num'] == 0:
 		return state['balance']
 	else:
-		return price_of(state['stock']['data']['etf']) * state['stock']['num'] + state['balance']
+		return price_of(state['stock']['code']) * state['stock']['num'] + state['balance']
+
+
+def can_sell(d):
+	if state['stock']['code'] == {}:
+		return True
+	if date_of(state['stock']['code']) < d:
+		print('should not happen in can_sell')
+		exit(0)
+	if date_of(state['stock']['code']) > d:
+		print('{} can not sell in {}'.format(state['stock']['code']['code'], d))
+	return date_of(state['stock']['code']) == d
 
 
 def can_buy(m, price):
@@ -143,36 +158,37 @@ def can_buy(m, price):
 
 
 def pure_sell():
-	state['balance'] += (price_of(state['stock']['data']['etf']) * state['stock']['num'] * (1 - tax_rate))
-	data = state['stock']['data']
-	print("{0} wealth: {6}, sell {1}, {2} * {3} = {4}, tax: {5}".format(
-		data['point']['history'][data['point']['index']]['date'],
-		data['etf']['code'], price_of(data['etf']), state['stock']['num'],
-		price_of(state['stock']['data']['etf']) * state['stock']['num'],
-		price_of(state['stock']['data']['etf']) * state['stock']['num'] * tax_rate, state['balance']))
+	state['balance'] += (price_of(state['stock']['code']) * state['stock']['num'] * (1 - tax_rate))
+	code = state['stock']['code']
+	print("{} wealth: {}, sell {}, {} * {} = {}, tax: {}".format(
+		date_of(code),
+		state['balance'],
+		code['code'], price_of(code), state['stock']['num'],
+		price_of(state['stock']['code']) * state['stock']['num'],
+		price_of(state['stock']['code']) * state['stock']['num'] * tax_rate))
 
 
 def sell_end():
-	state['stock'] = {'data': {}, 'price': 0, 'date': '', 'num': 0}
+	state['stock'] = {'code': {}, 'price': 0, 'date': '', 'num': 0}
 	state['buy'] = 0
 
 
 def pure_buy(code):
 	state['buy'] = state['balance']
-	state['stock']['date'] = code['point']['history'][code['point']['index']]['date']
-	state['stock']['data'] = code
-	state['stock']['num'] = can_buy(state['balance'], price_of(code['etf']))
-	state['balance'] -= state['stock']['num'] * price_of(code['etf']) * (1 + tax_rate)
-	# print("{0} wealth: {7}, buy {1}, {2} * {3} = {4}, tax: {5}, balance: {6}".format(
-	# 	data['point']['history'][data['point']['index']]['date'],
-	# 	data['etf']['code'], price_of(data['etf']), state['stock']['num'],
-	# 	price_of(data['etf']) * state['stock']['num'],
-	# 	price_of(data['etf']) * state['stock']['num'] * tax_rate, state['balance'],
-	# 	price_of(data['etf']) * state['stock']['num'] + state['balance']
-	# ))
-	record(code['point']['history'][code['point']['index']]['date'],
-		   price_of(code['etf']) * state['stock']['num'] + state['balance'],
-		   0, 'buy', code['etf']['code'], price_of(code['etf']), state['stock']['num'])
+	state['stock']['date'] = date_of(code)
+	state['stock']['code'] = code
+	state['stock']['num'] = can_buy(state['balance'], price_of(code))
+	state['balance'] -= state['stock']['num'] * price_of(code) * (1 + tax_rate)
+	print("{0} wealth: {7}, buy {1}, {2} * {3} = {4}, tax: {5}, balance: {6}".format(
+		code['history'][code['index']]['date'],
+		code['code'], price_of(code), state['stock']['num'],
+		price_of(code) * state['stock']['num'],
+		price_of(code) * state['stock']['num'] * tax_rate, state['balance'],
+		price_of(code) * state['stock']['num'] + state['balance']
+	))
+	record(code['history'][code['index']]['date'],
+		   price_of(code) * state['stock']['num'] + state['balance'],
+		   0, 'buy', code['code'], price_of(code), state['stock']['num'])
 
 
 def record(date, w, ratio, o, code, price, num, tax_ratio=1):
@@ -180,7 +196,8 @@ def record(date, w, ratio, o, code, price, num, tax_ratio=1):
 
 
 def buy(code):
-	pure_sell()
+	if state['stock']['code']:
+		pure_sell()
 	pure_buy(code)
 
 
@@ -199,14 +216,14 @@ def summary():
 		print(current / state['init'] - 1, "")
 
 
-def should_buy(func, days, part, data):
-	if func(days, part, data) > 0 and state['stock']['data'] != data:
+def should_buy(func, days, code):
+	if func(days, code) > 0 and state['stock']['code'] != code:
 		return True
 	return False
 
 
-def should_sell(func, days, part, data):
-	if func(days, part, data) < 0 and state['stock']['data'] != {}:
+def should_sell(func, days, code):
+	if func(days, code) < 0 and state['stock']['code'] != {}:
 		return True
 	return False
 
@@ -220,27 +237,26 @@ def should_sell_roc20_origin(data):
 
 
 def should_buy_roc20_incr(data):
-	if roc(20, 'point', data) > 0 and state['stock']['data'] != data and price_of(data['point']) > price_of(
-			data['point'], -1):
+	if roc(20, data) > 0 and state['stock']['code'] != data and price_of(data) > price_of(
+			data, -1):
 		return True
 	return False
 
 
 def should_sell_roc20_decr(data):
-	if roc(20, 'point', data) < 0 and state['stock']['data'] != {} and price_of(data['point']) < price_of(data['point'],
-																										  -1):
+	if roc(20, data) < 0 and state['stock']['code'] != {} and price_of(data) < price_of(data, -1):
 		return True
 	return False
 
 
 def should_buy_bias20(data):
-	if bias(20, 'point', data) > 0 and state['stock']['data'] != data:
+	if bias(20, data) > 0 and state['stock']['code'] != data:
 		return True
 	return False
 
 
 def should_sell_bias20(data):
-	if bias(20, 'point', data) < 0 and state['stock']['data'] != {}:
+	if bias(20, data) < 0 and state['stock']['code'] != {}:
 		return True
 	return False
 
@@ -252,8 +268,8 @@ def init(money):
 	state['stock'] = {'code': {}, 'price': 0, 'date': '', 'num': 0}
 
 
-def end_of(data):
-	return data['point']['history'][-1]['date']
+def end_of(code):
+	return code['history'][-1]['date']
 
 
 def seeback(begin, pick_func, should_buy_func, should_sell_func, end='', money=1000000):
@@ -264,28 +280,34 @@ def seeback(begin, pick_func, should_buy_func, should_sell_func, end='', money=1
 	begin_date = datetime.datetime.fromisoformat(begin).date()
 	end_date = date.today() if end == '' else datetime.datetime.fromisoformat(end).date()
 	while begin_date <= end_date:
-		data = pick(pack, pick_func)
-		date_index = data['history'][data['index']]['date']
-		if end != '' and date > end:
-			summary()
-			break
-		if should_buy_func(data):
-			buy(data)
-		elif should_sell_func(data):
-			sell()
-		serial.append({'date': date, 'wealth': wealth()})
-		if date == end or date == end_of(data):
-			summary()
-			break
-		for d in datas:
-			d['point']['index'] += 1
-			d['etf']['index'] += 1
+		d = begin_date.isoformat()
+		data = pick(pack, d, pick_func)
+		if data:
+			if should_buy_func(data):
+				buy(data)
+			elif should_sell_func(data):
+				sell()
+			serial.append({'date': date, 'wealth': wealth()})
+			if date == end or date == end_of(data):
+				summary()
+				break
+		else:
+			print('skip', d)
+		forward(pack, d)
+		begin_date = begin_date + timedelta(1)
+	summary()
+
+
+def forward(pack, d):
+	for code in pack:
+		if date_of(code) == d:
+			code['index'] += 1
 
 
 def simple2(pick_days, opt_days):
-	seeback(['sz50', 'cy50'], '2018-01-01', calc_func(roc, 'point', pick_days),
-			lambda x: should_buy(roc, opt_days, 'point', x),
-			lambda x: should_sell(roc, opt_days, 'point', x))
+	seeback('2021-01-01', calc_func(roc, pick_days),
+			lambda x: should_buy(roc, opt_days, x),
+			lambda x: should_sell(roc, opt_days, x))
 
 
 def diff_date(begin, end):
@@ -304,6 +326,5 @@ def diff_date(begin, end):
 
 
 if __name__ == '__main__':
-	# parse_all()
-	print('{}'.format(date.today()))
-# simple2(20, 20)
+	parse_all()
+	simple2(1, 5)
