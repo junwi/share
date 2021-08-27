@@ -1,5 +1,4 @@
 from Box import Box
-import json
 from json import JSONEncoder
 
 
@@ -54,6 +53,21 @@ class Run:
 					trade.append(d)
 			self.boxes.append(Box(etf, cmp, trade))
 
+	def pick(self, pack):
+		n = -1
+		picked = None
+		for code in pack:
+			if code.higher(n):
+				n =
+			v = code.cmp[]
+			if n < v:
+				n = v
+				picked = code
+		return picked
+
+	def run(self):
+		while True:
+			b = pick(self.boxes)
 
 if __name__ == '__main__':
 	confs = [

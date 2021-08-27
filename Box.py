@@ -4,3 +4,6 @@ class Box:
 		self.cmp = cmp
 		self.trade = trade
 		self.index = 0
+
+	def higher(self, v):
+		return self.cmp[self.index] > v
