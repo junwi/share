@@ -1,12 +1,23 @@
 import functools
 
-path = '/Users/wangwei/stock/{0}.csv'
+path = 'data1/{0}'
 
 pack = [
 	{'name': 'sz50', 'point': {'code': 'sh000016'}, 'etf': {'code': 'sh510050'}},
 	{'name': 'cy50', 'point': {'code': 'sz399673'}, 'etf': {'code': 'sz159949'}},
 	{'name': 'zz1000', 'point': {'code': 'sh000852'}, 'etf': {'code': 'sh512100'}},
-	{'name': 'zzxf', 'point': {'code': 'sz399932'}, 'etf': {'code': 'sz159928'}}
+	{'name': 'zzxf', 'point': {'code': 'sz399932'}, 'etf': {'code': 'sz159928'}},
+	{'name': 'hs300', 'point': {'code': 'sz399300'}, 'etf': {'code': 'sh510300'}},
+	# {'name': 'zz500', 'point': {'code': 'sh000905'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'zzyh', 'point': {'code': 'sz399986'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'zzbj', 'point': {'code': 'sz399997'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'zzyy', 'point': {'code': 'sz399933'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'zzmt', 'point': {'code': 'sz399998'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'zzmt', 'point': {'code': 'sz399998'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'xny', 'point': {'code': 'sh000941'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'gzxp', 'point': {'code': 'sz980017'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'gzys', 'point': {'code': 'sz399395'}, 'etf': {'code': 'sh510500'}},
+	# {'name': 'gzgt', 'point': {'code': 'sz399440'}, 'etf': {'code': 'sh510500'}},
 ]
 
 state = {}
@@ -241,9 +252,10 @@ def summary():
 		record(state['date'], wealth(), 0, 'empty', '-', 0, 0)
 	if len(opts) > 0:
 		headers = ['date', 'wealth', 'ratio', 'operation', 'code', 'price', 'num', 'tax']
-		print('\t'.join(headers))
-	for o in opts:
-		print('\t'.join(str(x) for x in o))
+	# 	print('\t'.join(headers))
+	# for o in opts:
+	# 	print('\t'.join(str(x) for x in o))
+	print(wealth())
 
 
 # if not serial:
@@ -256,7 +268,7 @@ def summary():
 
 
 def should_buy(func, days, part, data):
-	if func(days, part, data) > 0 and state['stock']['data'] != data:
+	if func(days, part, data) > 0 and state['stock']['data'] != data and bias(100, part, data) > 0:
 		return True
 	return False
 
@@ -322,7 +334,7 @@ def seeback(choose, begin, pick_func, should_buy_func, should_sell_func, end='',
 				set_index(data, 'etf', begin)
 				datas.append(data)
 	while True:
-		data = pick(datas, pick_func)
+		data = pick_func(datas)# pick(datas, pick_func)
 		date = data['point']['history'][data['point']['index']]['date']
 		state['date'] = date
 		if end != '' and date > end:
@@ -341,10 +353,30 @@ def seeback(choose, begin, pick_func, should_buy_func, should_sell_func, end='',
 			d['etf']['index'] += 1
 
 
+def pick_2_round(pack, round1_num, round1_func, round2_func):
+	round1 = []
+	for data in pack:
+		round1.append([round1_func(data), data])
+	round1.sort(key=lambda x: x[0], reverse=True)
+	if len(round1) <= round1_num:
+		round2 = round1
+	else:
+		round2 = round1[0:round1_num]
+	return pick([x[1] for x in round2], round2_func)
+
+
+def simple2round(round1, round2, opt):
+	seeback(['cy50', 'hs300', 'zzxf', 'zz1000'], '2020-12-31',
+				lambda x: pick_2_round(x, 2, calc_func(roc, 'point', round1), calc_func(roc, 'point', round2)),
+			lambda x: should_buy(roc, opt, 'point', x),
+			lambda x: should_sell(roc, opt, 'point', x), end='2021-12-31')
+
+
 def simple2(pick_days, opt_days):
-	seeback(['sz50', 'zz1000'], '2020-12-31', calc_func(roc, 'point', pick_days),
+	seeback(['cy50', 'sz50'],                    '2020-12-31',
+			lambda x: pick(x, calc_func(roc, 'point', pick_days)),
 			lambda x: should_buy(roc, opt_days, 'point', x),
-			lambda x: should_sell(roc, opt_days, 'point', x), '2021-07-21')
+			lambda x: should_sell(roc, opt_days, 'point', x), end='2021-12-31')
 
 
 def diff_date(begin, end):
@@ -364,5 +396,7 @@ def diff_date(begin, end):
 
 if __name__ == '__main__':
 	parse_all()
-	verify()
+	# verify()
+
+	# simple2round(40, 20, 20)
 	simple2(20, 20)

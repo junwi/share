@@ -14,11 +14,28 @@ def get_price_day_tx(code, begin_date='', end_date='', count=10, frequency='1d')
 	ms = 'qfq' + unit;
 	stk = st['data'][code]
 	buf = stk[ms] if ms in stk else stk[unit]  # 指数返回不是qfqday,是day
+	for b in buf:
+		if len(b) == 7:
+			b.pop()
 	df = pd.DataFrame(buf, columns=['time', 'open', 'close', 'high', 'low', 'volume'], dtype='float')
 	df.time = pd.to_datetime(df.time);
 	df.set_index(['time'], inplace=True);
 	df.index.name = ''  # 处理索引
-	return df
+	return df, stk['qt'][code][1]
+
+
+def get_price_day_json_tx(code, begin_date='', end_date='', count=10, frequency='1d'):  # 日线获取
+	unit = 'week' if frequency in '1w' else 'month' if frequency in '1M' else 'day'  # 判断日线，周线，月线
+	if end_date:  end_date = end_date.strftime('%Y-%m-%d') if isinstance(end_date, datetime.date) else \
+	end_date.split(' ')[0]
+	end_date = '' if end_date == datetime.datetime.now().strftime('%Y-%m-%d') else end_date  # 如果日期今天就变成空
+	URL = f'http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},{unit},{begin_date},{end_date},{count},qfq'
+	print(URL)
+	st = json.loads(requests.get(URL).content)
+	ms = 'qfq' + unit;
+	stk = st['data'][code]
+	buf = stk[ms] if ms in stk else stk[unit]  # 指数返回不是qfqday,是day
+	return buf
 
 
 # 腾讯分钟线
