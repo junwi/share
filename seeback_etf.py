@@ -400,7 +400,7 @@ def find_longest(pack, begin, end):
 			print('from {} to {}, incr {:.2f}%'.format(s['date'], e['date'], (e['price'] / s['price'] - 1) * 100))
 
 
-def last_longest(pack, day_num):
+def last_longest(pack):
 	r = {}
 	for code in pack:
 		n = []
@@ -415,27 +415,32 @@ def last_longest(pack, day_num):
 		e = days[0]
 		e1 = days[1]
 		s = days[-1]
+		s1 = days[-2]
 		if code not in etf_name:
 			print(code)
 			continue
-		c.append([code, etf_name[code], 'from {} to {}, total {:.2f}%, last {:.2f}%'
-				 .format(s['date'], e['date'], (e['price'] / s['price'] - 1) * 100, (e['price'] / e1['price'] - 1) * 100), len(days), e['date']])
-	c.sort(key=lambda x: x[3], reverse=True)
-	n = 0
-	for s in c:
-		flag = False
-		for line in lines:
-			if line <= day_num:
-				continue
-			if bias_date(s[0], s[4], line, codes) <= 0:
-				flag = True
-				break
-		if flag:
+		total = (e['price'] / s['price'] - 1) * 100
+		if total <= 0.01:
 			continue
-		if s[3] != n:
-			n = s[3]
-			print(n - 1)
-		print(s[0], s[1].strip(), s[2])
+		c.append({'code': code, 'name': etf_name[code], 'start': s1['date'], 'end': e['date'], 'days': len(days) - 1,
+					'total': (e['price'] / s['price'] - 1) * 100, 'last': (e['price'] / e1['price'] - 1) * 100})
+	c.sort(reverse=True, key=lambda x: (x['days'], x['total'], x['last']))
+	return c
+
+
+def longest(code, days, func):
+	if len(code['history']) < days:
+		return None
+	n = []
+	for i in reversed(range(days, len(code['history']))):
+		n.append(code['history'][i])
+		v = func(days, i, code)
+		if v <= 0:
+			break
+	if len(n) <= 1:
+		return None
+	return {'code': code['code'], 'name': etf_name[code['code']], 'start': n[-2]['date'], 'end': n[0]['date'], 'days': len(n) - 1,
+					'total': (n[0]['price'] / n[-1]['price'] - 1) * 100, 'last': (n[-2]['price'] / n[-1]['price'] - 1) * 100}
 
 
 def parse_etf_name():
@@ -446,8 +451,54 @@ def parse_etf_name():
 		etf_name[arr[0]] = arr[1]
 
 
-if __name__ == '__main__':
+def find_last_longest():
 	parse_all()
 	parse_etf_name()
 	calc_history(codes, roc_index, 1)
-	last_longest(codes, 10)
+	day_num = 20
+	c = last_longest(codes)
+	up = True
+	n = 0
+	for s in c:
+		flag = False
+		if up:
+			for line in lines:
+				if line <= day_num:
+					continue
+				if bias_date(s['code'], s['end'], line, codes) <= 0:
+					flag = True
+					break
+		if flag:
+			continue
+		if s['days'] != n:
+			n = s['days']
+			print(n)
+		print('{} {} {:.2f} {:.2f}'.format(s['code'], s['name'].strip(), s['total'], s['last']))
+
+
+def longest_up_bias(pack, days):
+	parse_all()
+	parse_etf_name()
+	all = []
+	for code in pack:
+		v = longest(code, days, bias_index)
+		if v and v['total'] >= 0.01:
+			ps = []
+			for l in lines:
+				if l > days:
+					n = longest(code, l, bias_index)
+					if n:
+						ps.append('{}: {} days, incr: {:.2f}%'.format(l, n['days'], n['total']))
+			v['ps'] = ', '.join(ps)
+			all.append(v)
+	all.sort(reverse=True, key=lambda x: (x['days'], x['total'], x['last']))
+	n = 0
+	for s in all:
+		if s['days'] != n:
+			n = s['days']
+			print(n)
+		print('{} {} total: {:.2f}% last: {:.2f}%, {}'.format(s['code'], s['name'].strip(), s['total'], s['last'], s['ps']))
+
+
+if __name__ == '__main__':
+	longest_up_bias(codes, 5)

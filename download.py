@@ -4,7 +4,7 @@ from Ashare import *
 
 def download1():
 	codes = ['sh000016', 'sz399673', 'sh000852', 'sh510050', 'sz159949', 'sh512100', 'sz399932', 'sz159928', 'sz399300',
-			 'sh510300', 'sh000905', 'sh510500']
+			 'sh510300', 'sh000905', 'sh510500', 'sh000933', 'sh512010']
 	for code in codes:
 		df = get_price_sina(code, frequency='1d', count=10000)
 		df.pop('volume')
